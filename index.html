@@ -1,65 +1,251 @@
 <!DOCTYPE html>
-<html>
+<html lang="hi">
 <head>
-    <meta charset="UTF-8">
-    <title>Live Prediction Panel</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: #fff;
-            text-align: center;
-            padding: 20px;
-        }
-        h1 {
-            color: #00ff99;
-        }
-        input, button {
-            padding: 10px;
-            margin: 5px;
-            font-size: 16px;
-        }
-        .result-box {
-            margin-top: 20px;
-            padding: 15px;
-            background: #222;
-            border-radius: 8px;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live Prediction Panel</title>
+  <style>
+    :root{--bg:#0f1112;--panel:#151718;--muted:#9aa3a8;--accent:#00d27a;--card:#1a1c1d}
+    html,body{height:100%}
+    body{
+      margin:0;font-family:Inter,system-ui,Arial,sans-serif;
+      background:linear-gradient(180deg,#0b0c0d 0%, #101213 100%);
+      color:#e6eef0;display:flex;align-items:flex-start;justify-content:center;padding:18px;
+    }
+    .wrap{width:100%;max-width:720px}
+    header{padding:10px 6px 18px}
+    h1{margin:0;font-size:20px;color:var(--accent);text-align:center}
+    p.lead{margin:8px 0 18px;text-align:center;color:var(--muted)}
+    .card{background:var(--panel);border-radius:12px;padding:16px;box-shadow:0 4px 18px rgba(0,0,0,.6)}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    input[type="number"], input[type="text"], textarea{
+      background:transparent;border:1px solid #222;padding:10px;border-radius:8px;color:#fff;outline:none;
+      min-width:0;flex:1;
+    }
+    textarea{min-height:70px;resize:vertical}
+    button{background:var(--accent);border:none;padding:10px 14px;border-radius:8px;color:#012;cursor:pointer;font-weight:600}
+    button.secondary{background:#2b2d2e;color:#fff}
+    .mt{margin-top:12px}
+    .result{margin-top:14px;padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border:1px solid rgba(255,255,255,0.03)}
+    .label{font-size:13px;color:var(--muted);margin-bottom:6px}
+    .bignum{font-size:28px;font-weight:700;color:#fff}
+    .sub{font-size:13px;color:var(--muted)}
+    .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .chip{background:#111;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03);font-weight:600}
+    .footer{margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
+    @media (max-width:480px){ h1{font-size:18px} }
+  </style>
 </head>
 <body>
+  <div class="wrap">
+    <header>
+      <h1>Live Prediction Panel</h1>
+      <p class="lead">Period number aur last result (ya history) dal kar <strong>Predict</strong> karo.</p>
+    </header>
 
-    <h1>Live Prediction Panel</h1>
-    <p>Period Number aur Result Enter karo:</p>
+    <div class="card">
+      <div class="label">Single last period (optional)</div>
+      <div class="row">
+        <input id="period" type="text" placeholder="Period (e.g. 202508091000010959) - optional" />
+        <input id="last" type="number" placeholder="Last result (0-9) - optional" min="0" max="9"/>
+        <button id="quickPredict" title="Predict next from last">Predict</button>
+      </div>
 
-    <input type="number" id="period" placeholder="Period Number">
-    <input type="number" id="result" placeholder="Last Result">
-    <button onclick="predict()">Predict</button>
+      <div class="mt label">या पूरा history paste karo (comma/space separated last digits)</div>
+      <textarea id="history" placeholder="Example: 3, 9, 1, 4, 4, 2, 3"></textarea>
+      <div class="row mt">
+        <button id="fromHistory" class="secondary">Predict from history</button>
+        <button id="clearHistory" class="secondary">Clear history</button>
+      </div>
 
-    <div class="result-box" id="prediction"></div>
+      <div id="out" class="result" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="sub">Predicted Period</div>
+            <div id="predPeriod" class="bignum">—</div>
+          </div>
+          <div style="text-align:right">
+            <div class="sub">Predicted Number</div>
+            <div id="predNumber" class="bignum">—</div>
+            <div class="sub" id="predSide">—</div>
+          </div>
+        </div>
 
-    <script>
-        function predict() {
-            let period = parseInt(document.getElementById("period").value);
-            let result = parseInt(document.getElementById("result").value);
-            
-            if (isNaN(period) || isNaN(result)) {
-                document.getElementById("prediction").innerHTML = "❌ Pehle dono values enter karo!";
-                return;
-            }
+        <div class="mt">
+          <div class="label">Confidence</div>
+          <div id="conf" class="chip">—</div>
+          <div class="label mt">Top digits (heuristic probabilities)</div>
+          <div id="topDigits" class="chips"></div>
+        </div>
 
-            // Simple demo prediction logic
-            let nextPrediction = (result + 3) % 10; 
-            let reason = "Last result par 3 add karke next number nikala.";
+        <div class="mt">
+          <div class="label">Reason</div>
+          <div id="reason" class="sub">—</div>
+        </div>
 
-            document.getElementById("prediction").innerHTML = `
-                <h2>📊 Prediction Result</h2>
-                <p><b>Period:</b> ${period + 1}</p>
-                <p><b>Predicted Number:</b> ${nextPrediction}</p>
-                <p><b>Reason:</b> ${reason}</p>
-            `;
-        }
-    </script>
+        <div class="mt">
+          <div class="label">History used</div>
+          <div id="usedHistory" class="sub">—</div>
+        </div>
+      </div>
 
+      <div class="footer mt">Note: Ye tool pattern-based heuristic use karta hai — 100% guarantee nahi deta. Risk sambhaal ke khelo.</div>
+    </div>
+  </div>
+
+<script>
+/*
+ Heuristic prediction algorithm (client-side):
+ - Accepts either a single last result OR a list of recent digits (0-9).
+ - Computes side frequencies (Small 0-4, Big 5-9), recent streak, most frequent digits per side.
+ - Assumes 'crowd' leans to side with frequency; company tends to pay opposite -> predicted = opposite of crowd.
+ - Produces confidence % from frequency difference and streak length.
+ - Outputs top 3 digits for predicted side, with heuristic probabilities.
+*/
+
+function sideOf(d){ return (d>=0 && d<=4)? 'Small' : 'Big'; }
+
+function parseHistory(text){
+  if(!text) return [];
+  // split on commas, spaces, dots, newlines
+  const tokens = text.split(/[\s,.;|]+/).map(s=>s.trim()).filter(Boolean);
+  const digits = [];
+  for(const t of tokens){
+    // extract last numeric digit in token if present
+    const m = t.match(/(\d)\s*$/);
+    if(m) digits.push(parseInt(m[1],10));
+    else if(/^\d+$/.test(t)) digits.push(parseInt(t[t.length-1],10));
+  }
+  return digits;
+}
+
+function analyze(digits, last){
+  const N = digits.length + (typeof last === 'number' ? 1 : 0);
+  const all = digits.slice();
+  if(typeof last === 'number') all.push(last);
+
+  if(all.length === 0) return null;
+
+  const freq = Array(10).fill(0);
+  const sideFreq = { Small:0, Big:0 };
+  for(const d of all){
+    if(d>=0 && d<=9){
+      freq[d]++;
+      sideFreq[ sideOf(d) ]++;
+    }
+  }
+
+  // compute recent streak of last side
+  let lastSide = sideOf(all[all.length-1]);
+  let streak = 1;
+  for(let i=all.length-2;i>=0;i--){
+    if(sideOf(all[i]) === lastSide) streak++;
+    else break;
+  }
+
+  // crowd weight heuristic (freq + streak bias)
+  const smallWeight = sideFreq.Small + (lastSide === 'Small' ? streak * 1.2 : 0);
+  const bigWeight   = sideFreq.Big   + (lastSide === 'Big' ? streak * 1.2 : 0);
+  const crowdSide = smallWeight > bigWeight ? 'Small' : 'Big';
+  const predicted = crowdSide === 'Small' ? 'Big' : 'Small';
+
+  // confidence: normalized difference + streak factor (cap)
+  const rawDiff = Math.abs(smallWeight - bigWeight);
+  const confBase = Math.min(90, Math.round((rawDiff / Math.max(1, all.length + streak*0.8)) * 100) + 48);
+  const confidence = Math.max(40, confBase); // floor 40%
+
+  // choose top digits in predicted side by frequency
+  const candidates = [];
+  for(let d=0; d<=9; d++){
+    if(sideOf(d) === predicted) candidates.push({d,f:freq[d]});
+  }
+  candidates.sort((a,b)=>b.f - a.f || a.d - b.d);
+
+  let top = candidates.filter(c=>c.f>0).slice(0,3).map(c=>c.d);
+  if(top.length === 0){
+    // fallback defaults for side
+    top = predicted === 'Small' ? [2,3,1] : [7,8,9];
+  }
+
+  // simple probability heuristic for top digits
+  const totalPredFreq = candidates.reduce((s,x)=>s+x.f,0) || 1;
+  const digitProb = top.map(d=>{
+    const f = freq[d] || 0;
+    let p = Math.round((f/totalPredFreq)*100);
+    if(p === 0) p = Math.round(confidence / top.length);
+    return {d,prob:p};
+  });
+
+  // decide predictedNumber as the highest-probability top digit
+  const predictedNumber = digitProb.reduce((a,b)=> a.prob >= b.prob ? a : b, digitProb[0]).d;
+
+  // reason text
+  const reason = `History me Small:${sideFreq.Small}, Big:${sideFreq.Big}. Recent streak (${streak}) on ${lastSide}. Crowd likely on ${crowdSide}, company often pays opposite → predicted ${predicted}.`;
+
+  return {
+    predicted,
+    confidence,
+    top,
+    digitProb,
+    predictedNumber,
+    reason,
+    usedHistory: all.slice().reverse().slice(0,20).reverse() // show up to last 20 used
+  };
+}
+
+function showResult(res, periodNext){
+  const out = document.getElementById('out');
+  document.getElementById('predPeriod').textContent = periodNext ?? '—';
+  document.getElementById('predNumber').textContent = res.predictedNumber;
+  document.getElementById('predSide').textContent = `${res.predicted} (expected)`;
+  document.getElementById('conf').textContent = `${res.confidence}%`;
+  const topDiv = document.getElementById('topDigits');
+  topDiv.innerHTML = '';
+  res.digitProb.forEach(x=>{
+    const el = document.createElement('div');
+    el.className = 'chip';
+    el.textContent = `${x.d} — ${x.prob}%`;
+    topDiv.appendChild(el);
+  });
+  document.getElementById('reason').textContent = res.reason;
+  document.getElementById('usedHistory').textContent = res.usedHistory.join(', ');
+  out.style.display = 'block';
+}
+
+// button handlers
+document.getElementById('quickPredict').addEventListener('click', ()=>{
+  const p = document.getElementById('period').value.trim();
+  const lastRaw = document.getElementById('last').value.trim();
+  const last = lastRaw === '' ? null : parseInt(lastRaw,10);
+  const histText = document.getElementById('history').value.trim();
+  const parsed = parseHistory(histText);
+  // if user entered last but no history, use last alone
+  let digits = parsed.length ? parsed : [];
+  const res = analyze(digits, (isNaN(last)? null : last));
+  if(!res){
+    alert('Pehle history ya last result daalo.');
+    return;
+  }
+  // period next calculation (if numeric)
+  let periodNext = null;
+  if(p && /^\d+$/.test(p)) periodNext = String(BigInt(p) + 1n);
+  showResult(res, periodNext);
+});
+
+document.getElementById('fromHistory').addEventListener('click', ()=>{
+  const hist = document.getElementById('history').value.trim();
+  const digits = parseHistory(hist);
+  if(digits.length === 0){ alert('History textarea me comma-separated digits daalo (ex: 3,9,1,4)'); return; }
+  const res = analyze(digits, null);
+  showResult(res, 'auto');
+});
+
+document.getElementById('clearHistory').addEventListener('click', ()=>{
+  document.getElementById('history').value = '';
+  document.getElementById('period').value = '';
+  document.getElementById('last').value = '';
+  document.getElementById('out').style.display = 'none';
+});
+</script>
 </body>
-</html>
+          </html>
