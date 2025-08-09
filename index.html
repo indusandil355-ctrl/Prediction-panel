@@ -1,76 +1,163 @@
-<!DOCTYPE html>
-<html>
+// server-axios.js
+const express = require('express');
+const axios = require('axios');
+const cors = require('cors');
+const app = express();
+app.use(cors());
+const PORT = process.env.PORT || 8080;
+
+/*
+  Replace API_URL with the real endpoint if you have it.
+  Example API might return JSON: { period: "...", result: 7 }
+*/
+const API_URL_1 = 'https://example.com/api/latest'; // <-- change
+const API_URL_2 = 'https://www.predictwingo.in/api/latest'; // <-- change
+
+async function fetchFromApi(url){
+  const res = await axios.get(url, { timeout: 8000 });
+  return res.data;
+}
+
+app.get('/api/combined', async (req, res) => {
+  try{
+    // parallel fetch
+    const [a,b] = await Promise.all([ fetchFromApi(API_URL_1), fetchFromApi(API_URL_2) ]);
+    // customize mapping according to actual response structure
+    const result = {
+      source1: a,
+      source2: b,
+      combinedAt: new Date().toISOString()
+    };
+    res.json(result);
+  }catch(err){
+    console.error(err.message);
+    res.status(500).json({ error: 'fetch failed', detail: err.message });
+  }
+});
+
+app.listen(PORT, ()=> console.log('Listening on',PORT));
+
+
+    // server-puppeteer.js
+const express = require('express');
+const cors = require('cors');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
+const app = express();
+app.use(cors());
+const PORT = process.env.PORT || 8080;
+
+/*
+  Example: we'll visit 91appe page and try to read a DOM selector that contains the latest result.
+  You MUST replace selectorString with the real DOM selector that shows the number.
+*/
+
+const GAME_PAGE = 'https://91appe.com/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo';
+const SELECTOR_FOR_RESULT = '.last-result-selector'; // <-- change to actual selector
+
+async function scrapeOne(url, selector){
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox','--disable-setuid-sandbox'],
+    headless: true
+  });
+  try{
+    const page = await browser.newPage();
+    await page.goto(url, {waitUntil:'networkidle2', timeout:20000});
+    // wait for selector (adjust timeout as needed)
+    await page.waitForSelector(selector, {timeout:7000});
+    const text = await page.$eval(selector, el => el.innerText.trim());
+    return text;
+  }catch(err){
+    throw err;
+  }finally{
+    await browser.close();
+  }
+}
+
+app.get('/api/scrape91', async (req,res)=>{
+  try{
+    const text = await scrapeOne(GAME_PAGE, SELECTOR_FOR_RESULT);
+    res.json({source:'91appe', value:text});
+  }catch(e){
+    console.error(e);
+    res.status(500).json({ error:'scrape failed', detail: e.message });
+  }
+});
+
+app.listen(PORT, ()=> console.log('Puppeteer server listening on', PORT));
+    <!DOCTYPE html>
+<html lang="hi">
 <head>
-    <title>WinGo Prediction Panel</title>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: Arial, sans-serif; background: #111; color: white; text-align: center; }
-        h1 { color: #ffcc00; }
-        input, button { 
-            padding: 10px; 
-            font-size: 16px; 
-            margin: 5px; 
-            border-radius: 5px; 
-            border: 2px solid #ffcc00;
-            background-color: #222; 
-            color: white; 
-        }
-        input::placeholder {
-            color: #aaa;
-        }
-        button {
-            background-color: #ffcc00; 
-            color: black; 
-            font-weight: bold; 
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: orange;
-        }
-        .result-box { 
-            background: #222; 
-            padding: 15px; 
-            margin-top: 20px; 
-            border-radius: 8px; 
-        }
-    </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Combined WinGo Panel</title>
+<style>
+  body{background:#111;color:#fff;font-family:Arial;text-align:center;padding:20px}
+  .box{background:#222;padding:16px;border-radius:8px;max-width:540px;margin:20px auto}
+  input,button{padding:10px;margin:6px;border-radius:6px}
+  .chip{display:inline-block;padding:6px 10px;background:#111;border:1px solid #333;border-radius:6px;margin:4px}
+</style>
 </head>
 <body>
-
-    <h1>🎯 WinGo Prediction Panel</h1>
-    <p>Period Number:</p>
-    <input type="text" id="period" placeholder="Enter period number">
-    <p>Last Result:</p>
-    <input type="text" id="lastResult" placeholder="Enter last result">
-    <br><br>
-    <button onclick="predict()">Get Prediction</button>
-
-    <div class="result-box" id="output">
-        Prediction will appear here...
+  <h2>Combined WinGo Panel</h2>
+  <div class="box">
+    <div>
+      <button id="refresh">🔁 Fetch live from backend</button>
+      <button id="predictBtn">Predict (use fetched)</button>
     </div>
+    <div id="live" style="margin-top:12px">No data yet</div>
+    <div id="pred" style="margin-top:12px"></div>
+  </div>
 
-    <script>
-        function predict() {
-            let period = document.getElementById("period").value;
-            let lastResult = document.getElementById("lastResult").value;
-            let prediction, reason;
+<script>
+const API_BASE = 'https://your-backend.example.com'; // <-- change to your deployed backend
 
-            // Dummy logic
-            if (lastResult % 2 === 0) {
-                prediction = "Small";
-                reason = "Last result was even, small number chance is high.";
-            } else {
-                prediction = "Big";
-                reason = "Last result was odd, big number chance is high.";
-            }
+document.getElementById('refresh').addEventListener('click', async ()=>{
+  document.getElementById('live').textContent = 'Fetching...';
+  try{
+    const r = await fetch(API_BASE + '/api/combined'); // or '/api/scrape91'
+    const j = await r.json();
+    document.getElementById('live').textContent = JSON.stringify(j, null, 2);
+    window._lastFetched = j;
+  }catch(e){
+    document.getElementById('live').textContent = 'Fetch failed: ' + e.message;
+  }
+});
 
-            document.getElementById("output").innerHTML = `
-                <h2>Prediction for Period ${period}:</h2>
-                <p><strong>${prediction}</strong></p>
-                <p>Reason: ${reason}</p>
-            `;
-        }
-    </script>
+document.getElementById('predictBtn').addEventListener('click', ()=>{
+  const data = window._lastFetched;
+  if(!data){
+    alert('Pehle Fetch karo (Refresh)');
+    return;
+  }
+  // example: find last digit(s) from source1 or source2
+  // This depends on how backend shapes the response.
+  // We'll try to find a numeric digit in returned JSON (adjust as needed).
+  let last = null;
+  if(data.source1 && typeof data.source1.result !== 'undefined') last = data.source1.result;
+  else if(data.source2 && typeof data.source2.result !== 'undefined') last = data.source2.result;
+  else {
+    // fallback: find any number inside JSON string
+    const s = JSON.stringify(data);
+    const m = s.match(/(\d)(?!.*\d)/); // last single digit match (very rough)
+    if(m) last = parseInt(m[1]);
+  }
+  if(last === null || isNaN(last)){
+    alert('Unable to parse last result from data. Backend format mismatch.');
+    return;
+  }
 
+  // simple prediction: opposite side heuristic
+  const side = (last >=0 && last <=4) ? 'Small' : 'Big';
+  const predictedSide = side === 'Small' ? 'Big' : 'Small';
+  const predictedNumber = predictedSide === 'Small' ? 2 : 7; // placeholder
+  document.getElementById('pred').innerHTML = `
+    <div class="chip">Last: ${last}</div>
+    <div class="chip">Predicted side: ${predictedSide}</div>
+    <div class="chip">Predicted number: ${predictedNumber}</div>
+  `;
+});
+</script>
 </body>
-</html>
+          </html>
