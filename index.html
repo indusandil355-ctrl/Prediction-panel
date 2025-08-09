@@ -1,10 +1,65 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Prediction Panel</title>
+    <meta charset="UTF-8">
+    <title>Live Prediction Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: #00ff99;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: #222;
+            border-radius: 8px;
+        }
+    </style>
 </head>
 <body>
+
     <h1>Live Prediction Panel</h1>
-    <p>Yahan par result update hoga...</p>
+    <p>Period Number aur Result Enter karo:</p>
+
+    <input type="number" id="period" placeholder="Period Number">
+    <input type="number" id="result" placeholder="Last Result">
+    <button onclick="predict()">Predict</button>
+
+    <div class="result-box" id="prediction"></div>
+
+    <script>
+        function predict() {
+            let period = parseInt(document.getElementById("period").value);
+            let result = parseInt(document.getElementById("result").value);
+            
+            if (isNaN(period) || isNaN(result)) {
+                document.getElementById("prediction").innerHTML = "❌ Pehle dono values enter karo!";
+                return;
+            }
+
+            // Simple demo prediction logic
+            let nextPrediction = (result + 3) % 10; 
+            let reason = "Last result par 3 add karke next number nikala.";
+
+            document.getElementById("prediction").innerHTML = `
+                <h2>📊 Prediction Result</h2>
+                <p><b>Period:</b> ${period + 1}</p>
+                <p><b>Predicted Number:</b> ${nextPrediction}</p>
+                <p><b>Reason:</b> ${reason}</p>
+            `;
+        }
+    </script>
+
 </body>
 </html>
