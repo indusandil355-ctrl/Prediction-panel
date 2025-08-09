@@ -6,8 +6,33 @@
     <style>
         body { font-family: Arial, sans-serif; background: #111; color: white; text-align: center; }
         h1 { color: #ffcc00; }
-        input, button { padding: 10px; font-size: 16px; margin: 5px; }
-        .result-box { background: #222; padding: 15px; margin-top: 20px; border-radius: 8px; }
+        input, button { 
+            padding: 10px; 
+            font-size: 16px; 
+            margin: 5px; 
+            border-radius: 5px; 
+            border: 2px solid #ffcc00;
+            background-color: #222; 
+            color: white; 
+        }
+        input::placeholder {
+            color: #aaa;
+        }
+        button {
+            background-color: #ffcc00; 
+            color: black; 
+            font-weight: bold; 
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: orange;
+        }
+        .result-box { 
+            background: #222; 
+            padding: 15px; 
+            margin-top: 20px; 
+            border-radius: 8px; 
+        }
     </style>
 </head>
 <body>
@@ -30,7 +55,7 @@
             let lastResult = document.getElementById("lastResult").value;
             let prediction, reason;
 
-            // Dummy logic (later replace with real API)
+            // Dummy logic
             if (lastResult % 2 === 0) {
                 prediction = "Small";
                 reason = "Last result was even, small number chance is high.";
