@@ -1,68 +1,75 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Wingo AI Prediction</title>
-  <style>
+<meta charset="UTF-8">
+<title>Wingo AI Prediction</title>
+<style>
     body {
-      background-color: #111;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 20px;
+        background-color: white;
+        color: black;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding: 20px;
     }
-    input, button {
-      padding: 10px;
-      font-size: 16px;
-      margin: 10px;
-      border-radius: 5px;
-      border: none;
-    }
-    input {
-      width: 250px;
-      text-align: center;
+    input, button, textarea {
+        margin: 10px;
+        padding: 10px;
+        font-size: 16px;
+        width: 80%;
+        max-width: 400px;
     }
     button {
-      background-color: #ffcc00;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #ffaa00;
+        background-color: yellow;
+        color: black;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
     }
     .result {
-      margin-top: 20px;
-      font-size: 20px;
-      font-weight: bold;
+        margin-top: 20px;
+        font-size: 20px;
+        font-weight: bold;
     }
-  </style>
+</style>
 </head>
 <body>
-  <h1>🎯 Wingo AI Prediction</h1>
-  <p>Enter Last Period Number:</p>
-  <input type="number" id="period" placeholder="Example: 212218">
-  <br>
-  <button onclick="predict()">🔮 Predict Next</button>
-  <div class="result" id="output"></div>
 
-  <script>
-    function predict() {
-      let period = document.getElementById("period").value.trim();
-      if (!period) {
-        alert("Please enter last period number!");
+<h2>Wingo AI Prediction</h2>
+
+<input type="number" id="period" placeholder="Enter Last Period Number">
+<br>
+<textarea id="results" placeholder="Enter last 10 results, comma separated"></textarea>
+<br>
+<button onclick="predict()">Predict Next</button>
+
+<div class="result" id="output"></div>
+
+<script>
+function predict() {
+    let period = document.getElementById("period").value;
+    let results = document.getElementById("results").value.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+
+    if (results.length < 1) {
+        document.getElementById("output").innerText = "Please enter at least 1 previous result.";
         return;
-      }
-
-      // Simple AI-like pattern (offline logic)
-      let lastDigit = parseInt(period.slice(-1)); // Last digit
-      let predictedNum = (lastDigit + 3) % 10; // Just example pattern
-
-      // Big/Small chance calculation
-      let bigChance = predictedNum >= 5 ? 70 + Math.random() * 20 : 30 + Math.random() * 20;
-      let smallChance = 100 - bigChance;
-
-      document.getElementById("output").innerHTML =
-        `Predicted Number: <span style="color:yellow">${predictedNum}</span><br>
-         Big Chance: ${bigChance.toFixed(2)}% | Small Chance: ${smallChance.toFixed(2)}%`;
     }
-  </script>
+
+    // Basic pattern analysis: average + last digit
+    let avg = results.reduce((a,b) => a+b, 0) / results.length;
+    let lastDigit = Math.round(avg) % 10;
+
+    // Big/Small chance
+    let bigCount = results.filter(n => n >= 5).length;
+    let smallCount = results.length - bigCount;
+    let bigChance = (bigCount / results.length * 100).toFixed(1);
+    let smallChance = (smallCount / results.length * 100).toFixed(1);
+
+    document.getElementById("output").innerHTML =
+        `Predicted Number: <b>${lastDigit}</b><br>
+         Big Chance: ${bigChance}%<br>
+         Small Chance: ${smallChance}%`;
+}
+</script>
+
 </body>
 </html>
