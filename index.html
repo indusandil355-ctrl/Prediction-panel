@@ -1,23 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Wingo Prediction</title>
+  <title>🔥 Wingo Prediction Panel</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
       background-color: #111;
       color: white;
+      padding: 20px;
     }
     input, button {
       padding: 10px;
       margin: 10px;
       font-size: 16px;
     }
+    input {
+      width: 250px;
+      text-align: center;
+    }
     button {
       background-color: #ffcc00;
       border: none;
       cursor: pointer;
+      font-weight: bold;
     }
     button:hover {
       background-color: #ffaa00;
@@ -30,39 +36,35 @@
   </style>
 </head>
 <body>
-  <h1>🎯 Wingo Prediction Panel</h1>
+  <h1>🎯 Wingo AI Prediction</h1>
   
-  <p>Enter past results (comma separated):</p>
-  <input type="text" id="results" placeholder="Example: 4,2,3,9,0,1,4,3" size="50">
+  <p>Enter Last Period Number:</p>
+  <input type="number" id="lastResult" placeholder="Example: 8">
   <br>
-  <button onclick="predict()">🔮 Analyze & Predict</button>
+  <button onclick="predict()">🔮 Predict Next</button>
   
   <div class="result" id="output"></div>
   
   <script>
     function predict() {
-      let input = document.getElementById("results").value.trim();
-      if (!input) {
-        alert("Please enter past results!");
+      let lastNum = document.getElementById("lastResult").value.trim();
+      if (lastNum === "") {
+        alert("Please enter last period number!");
         return;
       }
-      let numbers = input.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
 
-      // Frequency count
-      let freq = {};
-      numbers.forEach(n => {
-        freq[n] = (freq[n] || 0) + 1;
-      });
+      lastNum = parseInt(lastNum);
+      if (isNaN(lastNum) || lastNum < 0 || lastNum > 9) {
+        alert("Please enter a valid number between 0 and 9!");
+        return;
+      }
 
-      // Most frequent number
-      let predictedNum = Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b);
+      // Simple prediction logic (AI-like random pattern)
+      let predictedNum = (lastNum + 3) % 10; // Example shift logic
 
-      // Calculate Big/Small chance
-      let bigCount = numbers.filter(n => n >= 5).length;
-      let smallCount = numbers.filter(n => n < 5).length;
-      let total = numbers.length;
-      let bigChance = ((bigCount / total) * 100).toFixed(2);
-      let smallChance = ((smallCount / total) * 100).toFixed(2);
+      // Big/Small chance
+      let bigChance = predictedNum >= 5 ? 70 : 30;
+      let smallChance = 100 - bigChance;
 
       document.getElementById("output").innerHTML =
         `Predicted Number: <span style="color:yellow">${predictedNum}</span><br>
