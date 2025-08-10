@@ -1,75 +1,163 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Wingo AI Prediction</title>
-<style>
-    body {
-        background-color: white;
-        color: black;
-        font-family: Arial, sans-serif;
-        text-align: center;
-        padding: 20px;
+  <meta charset="utf-8" />
+  <title>Prediction Panel (Heuristic)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg:#ffffff;
+      --text:#000000;
+      --accent:#0b64d6;
+      --muted:#444;
+      --card:#f5f7fb;
+      --highlight:#ffcc00;
     }
-    input, button, textarea {
-        margin: 10px;
-        padding: 10px;
-        font-size: 16px;
-        width: 80%;
-        max-width: 400px;
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:820px;margin:24px auto;padding:20px;border-radius:8px;}
+    h1{margin:0 0 12px;font-size:26px;color:var(--accent)}
+    label{display:block;font-weight:600;margin-top:12px;margin-bottom:6px}
+    input[type="text"], textarea, input[type="number"]{
+      width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:6px;font-size:15px;color:var(--text);
+      box-sizing:border-box;background:#fff;
     }
-    button {
-        background-color: yellow;
-        color: black;
-        font-weight: bold;
-        border: none;
-        cursor: pointer;
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .half{flex:1 1 180px}
+    .btn{
+      display:inline-block;padding:10px 16px;border-radius:8px;border:none;background:var(--highlight);
+      color:#111;font-weight:700;cursor:pointer;margin-top:14px;
     }
-    .result {
-        margin-top: 20px;
-        font-size: 20px;
-        font-weight: bold;
-    }
-</style>
+    .result-card{margin-top:18px;border-radius:8px;padding:14px;background:var(--card);box-shadow:0 1px 6px rgba(0,0,0,.06)}
+    .bigtext{font-size:20px;font-weight:700}
+    .muted{color:var(--muted);font-size:13px;margin-top:6px}
+    .bubbles{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .chip{padding:6px 10px;border-radius:999px;background:#fff;border:1px solid #ddd;font-weight:600}
+    .percent{font-weight:800;color:var(--accent)}
+    small.reason{display:block;margin-top:8px;color:var(--muted)}
+    footer{margin-top:20px;color:#666;font-size:13px}
+    @media (max-width:520px){ h1{font-size:20px}}
+  </style>
 </head>
 <body>
+  <div class="wrap">
+    <h1>Prediction Panel (Heuristic)</h1>
 
-<h2>Wingo AI Prediction</h2>
+    <label>1) Enter current/next period number (optional)</label>
+    <input id="period" type="text" placeholder="Example: 20250809100011412">
 
-<input type="number" id="period" placeholder="Enter Last Period Number">
-<br>
-<textarea id="results" placeholder="Enter last 10 results, comma separated"></textarea>
-<br>
-<button onclick="predict()">Predict Next</button>
+    <label>2) Enter past results (comma separated). Use last 8–20 results for better heuristics</label>
+    <textarea id="history" rows="3" placeholder="Example: 4,2,3,9,0,1,4,3,6,7"></textarea>
 
-<div class="result" id="output"></div>
+    <div class="row">
+      <div class="half">
+        <label>% money on Big (optional)</label>
+        <input id="pctBig" type="number" min="0" max="100" placeholder="ex: 30">
+      </div>
+      <div class="half">
+        <label>% money on Small (optional)</label>
+        <input id="pctSmall" type="number" min="0" max="100" placeholder="ex: 70">
+      </div>
+    </div>
 
-<script>
-function predict() {
-    let period = document.getElementById("period").value;
-    let results = document.getElementById("results").value.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+    <button class="btn" onclick="analyze()">🔮 Analyze & Predict</button>
 
-    if (results.length < 1) {
-        document.getElementById("output").innerText = "Please enter at least 1 previous result.";
-        return;
+    <div id="output" class="result-card" style="display:none">
+      <div id="summary" class="bigtext"></div>
+      <div id="details" class="muted"></div>
+      <div class="bubbles" id="candidates"></div>
+      <small class="reason" id="reason"></small>
+      <footer><small>Note: This is a heuristic client-side predictor for analysis/demo only. No guarantees.</small></footer>
+    </div>
+  </div>
+
+  <script>
+    function safeParseHistory(text){
+      if(!text) return [];
+      return text.split(',').map(s => s.trim()).filter(s => s !== '').map(s=>{
+        // if individual values are numeric single digits, parseInt; else if non-digit leave as string
+        let n = parseInt(s,10);
+        return (''+n === s || !isNaN(n)) ? n : s;
+      });
     }
 
-    // Basic pattern analysis: average + last digit
-    let avg = results.reduce((a,b) => a+b, 0) / results.length;
-    let lastDigit = Math.round(avg) % 10;
+    function analyze(){
+      const period = document.getElementById('period').value.trim();
+      const histText = document.getElementById('history').value.trim();
+      const pctBig = Number(document.getElementById('pctBig').value || 0);
+      const pctSmall = Number(document.getElementById('pctSmall').value || 0);
 
-    // Big/Small chance
-    let bigCount = results.filter(n => n >= 5).length;
-    let smallCount = results.length - bigCount;
-    let bigChance = (bigCount / results.length * 100).toFixed(1);
-    let smallChance = (smallCount / results.length * 100).toFixed(1);
+      const out = document.getElementById('output');
+      const summary = document.getElementById('summary');
+      const details = document.getElementById('details');
+      const candidates = document.getElementById('candidates');
+      const reason = document.getElementById('reason');
 
-    document.getElementById("output").innerHTML =
-        `Predicted Number: <b>${lastDigit}</b><br>
-         Big Chance: ${bigChance}%<br>
-         Small Chance: ${smallChance}%`;
-}
-</script>
+      const arr = safeParseHistory(histText);
 
+      if(arr.length < 1){
+        alert('Please enter at least 1 past result (better: 8–20).');
+        return;
+      }
+
+      // Count frequencies (works for numbers or strings)
+      const freq = {};
+      arr.forEach(x=>{
+        const key = String(x);
+        freq[key] = (freq[key]||0) + 1;
+      });
+
+      // Sort by frequency desc
+      const items = Object.keys(freq).map(k => ({val:k,count:freq[k]}))
+                  .sort((a,b)=> b.count - a.count);
+
+      // Top 3 candidates
+      const top = items.slice(0,3);
+
+      // compute big/small percentages from history (if numeric digits 0-9)
+      let numeric = arr.filter(x => typeof x === 'number' && !isNaN(x));
+      let bigCount = numeric.filter(n => Number(n) >= 5).length;
+      let smallCount = numeric.filter(n => Number(n) < 5).length;
+      let total = numeric.length || arr.length; // fallback to length
+      let bigPct = total ? Math.round((bigCount/total)*10000)/100 : 0;
+      let smallPct = total ? Math.round((smallCount/total)*10000)/100 : 0;
+
+      // If user provided stake distribution, combine it in a simple way to bias output
+      // (this is purely a UI heuristic, not a real model)
+      let biasText = '';
+      if(pctBig || pctSmall){
+        const sum = (pctBig||0) + (pctSmall||0);
+        if(sum === 0 || sum !== 100){
+          biasText = 'Note: stake % not summing to 100 ignored.';
+        } else {
+          biasText = `User stake distribution: Big ${pctBig}% / Small ${pctSmall}%.`;
+          // adjust big/small pct slightly toward user stake (simple linear blend)
+          bigPct = Math.round((bigPct*0.6 + pctBig*0.4)*100)/100;
+          smallPct = Math.round(100 - bigPct,2);
+        }
+      }
+
+      // Decide predicted category: choose whichever has higher pct
+      const predictedCategory = bigPct > smallPct ? 'Big' : (smallPct > bigPct ? 'Small' : 'Neutral');
+
+      // Prepare output
+      summary.innerHTML = `Prediction for period ${period ? ('<strong>'+period+'</strong>') : '(no period provided)'}: <span style="color:#111;background:var(--highlight);padding:4px 8px;border-radius:6px;margin-left:8px">${predictedCategory}</span>`;
+      details.innerHTML = `History length: ${arr.length} • Most frequent: ${items[0].val} (${items[0].count} times) • Big chance: <span class="percent">${bigPct}%</span> • Small chance: <span class="percent">${smallPct}%</span><br>${biasText}`;
+      candidates.innerHTML = '';
+      top.forEach(t => {
+        const p = Math.round((t.count/arr.length)*10000)/100;
+        const node = document.createElement('div');
+        node.className = 'chip';
+        node.innerHTML = `#${t.val} — ${p}%`;
+        candidates.appendChild(node);
+      });
+
+      // Reason (very short heuristic explanation)
+      reason.innerText = `Reason: Based on frequency of recent history and parity (big/small) distribution. This is a heuristic estimate only.`;
+
+      out.style.display = 'block';
+      // scroll to output on small screens
+      setTimeout(()=> out.scrollIntoView({behavior:'smooth', block:'center'}),200);
+    }
+  </script>
 </body>
 </html>
