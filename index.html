@@ -1,199 +1,73 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html>
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Prediction Panel — heuristic</title>
-<style>
-  :root{--bg:#0f0f0f;--card:#171717;--accent:#ffcc00;--muted:#999}
-  body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:#fff}
-  .wrap{max-width:820px;margin:20px auto;padding:20px}
-  h1{color:var(--accent);margin:0 0 12px}
-  .card{background:var(--card);padding:16px;border-radius:10px;margin-bottom:14px}
-  label{display:block;margin:6px 0;color:var(--muted);font-size:14px}
-  textarea,input,select{width:100%;padding:10px;border-radius:6px;border:1px solid #333;background:#0f0f0f;color:#fff}
-  button{background:var(--accent);border:none;color:#000;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}
-  .row{display:flex;gap:12px}
-  .col{flex:1}
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-  .chip{background:#222;padding:8px 10px;border-radius:8px;border:1px solid #2a2a2a}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  td,th{padding:6px;border-bottom:1px dashed #222;text-align:left}
-  .big{color:#7efc6b}
-  .small{color:#7fd2ff}
-  .warn{color:#ff8a8a}
-  .muted{color:var(--muted);font-size:13px}
-</style>
+  <title>Wingo Prediction</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #111;
+      color: white;
+    }
+    input, button {
+      padding: 10px;
+      margin: 10px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #ffcc00;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #ffaa00;
+    }
+    .result {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>🔮 Prediction Panel (Heuristic)</h1>
+  <h1>🎯 Wingo Prediction Panel</h1>
+  
+  <p>Enter past results (comma separated):</p>
+  <input type="text" id="results" placeholder="Example: 4,2,3,9,0,1,4,3" size="50">
+  <br>
+  <button onclick="predict()">🔮 Analyze & Predict</button>
+  
+  <div class="result" id="output"></div>
+  
+  <script>
+    function predict() {
+      let input = document.getElementById("results").value.trim();
+      if (!input) {
+        alert("Please enter past results!");
+        return;
+      }
+      let numbers = input.split(",").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
 
-    <div class="card">
-      <label>1) Past results (comma separated) — example: <span class="muted">4,2,3,9,0,1,4,3</span></label>
-      <textarea id="history" rows="3" placeholder="Enter recent numbers separated by comma (most recent last)"></textarea>
+      // Frequency count
+      let freq = {};
+      numbers.forEach(n => {
+        freq[n] = (freq[n] || 0) + 1;
+      });
 
-      <label>2) (Optional) Current period number (auto-fill if you want)</label>
-      <input id="period" placeholder="Period id (optional)">
+      // Most frequent number
+      let predictedNum = Object.keys(freq).reduce((a, b) => freq[a] > freq[b] ? a : b);
 
-      <label>3) (Optional) Stake distribution — percent of money on Big and Small (sum should be 100)</label>
-      <div class="row">
-        <div class="col">
-          <label class="muted">% on Big</label>
-          <input id="stakeBig" placeholder="ex: 30" />
-        </div>
-        <div class="col">
-          <label class="muted">% on Small</label>
-          <input id="stakeSmall" placeholder="ex: 70" />
-        </div>
-      </div>
+      // Calculate Big/Small chance
+      let bigCount = numbers.filter(n => n >= 5).length;
+      let smallCount = numbers.filter(n => n < 5).length;
+      let total = numbers.length;
+      let bigChance = ((bigCount / total) * 100).toFixed(2);
+      let smallChance = ((smallCount / total) * 100).toFixed(2);
 
-      <div style="margin-top:12px" class="row">
-        <div style="flex:0 0 auto"><button id="analyzeBtn">Analyze & Predict</button></div>
-        <div style="flex:1"></div>
-      </div>
-
-      <div class="chips" id="summaryChips"></div>
-    </div>
-
-    <div class="card" id="outputCard" style="display:none">
-      <div id="title" style="font-size:18px;font-weight:700;margin-bottom:8px"></div>
-      <div id="explain" class="muted"></div>
-
-      <table id="freqTable">
-        <thead><tr><th>Number</th><th>Count</th><th>Probability</th></tr></thead>
-        <tbody></tbody>
-      </table>
-
-      <div style="margin-top:12px">
-        <strong>Top 3 predicted numbers:</strong>
-        <div class="chips" id="top3"></div>
-      </div>
-
-      <div style="margin-top:12px">
-        <strong>Big vs Small probability:</strong>
-        <div id="bigSmallChips" class="chips"></div>
-      </div>
-
-      <div style="margin-top:12px">
-        <strong>Suggested action (based on stake distribution):</strong>
-        <div id="advice" class="chip"></div>
-      </div>
-    </div>
-
-    <div class="muted" style="margin-top:8px">
-      नोट: यह एक heuristic/statistical tool है — यह गारंटी नहीं देता। कोई भी betting decision अपनी responsibility पर लें।
-    </div>
-  </div>
-
-<script>
-// Helper functions
-function parseHistory(text){
-  if(!text) return [];
-  const arr = text.split(',').map(s=>s.trim()).filter(Boolean).map(s=>{
-    // keep only last digit if multi-digit
-    const m = s.match(/\d+/);
-    return m ? parseInt(m[0].slice(-1)) : NaN;
-  }).filter(n=>!isNaN(n) && n>=0 && n<=9);
-  return arr;
-}
-
-function analyze(history){
-  const counts = Array(10).fill(0);
-  history.forEach(d=>counts[d]++);
-  const total = history.length || 1;
-  const probs = counts.map(c => +(c/total*100).toFixed(2)); // percent
-  return {counts, probs, total};
-}
-
-function topKFromProbs(probs, k=3){
-  const items = probs.map((p,i)=>({num:i,prob:p}));
-  items.sort((a,b)=>b.prob - a.prob);
-  return items.slice(0,k);
-}
-
-function bigSmallProb(probs){
-  // small = 0-4, big = 5-9
-  const small = probs.slice(0,5).reduce((s,x)=>s+x,0);
-  const big = probs.slice(5,10).reduce((s,x)=>s+x,0);
-  return {small: +small.toFixed(2), big: +big.toFixed(2)};
-}
-
-function makeAdvice(stakeBig, stakeSmall, bsProb){
-  // If stake heavily on one side, suggest opposite if bsProb shows advantage
-  const advice = [];
-  if(stakeBig+stakeSmall === 0) {
-    advice.push('No stake distribution provided — no stake-based advice.');
-    return advice.join(' ');
-  }
-  if(stakeBig > stakeSmall){
-    // players put more on Big
-    if(bsProb.small > bsProb.big + 5) advice.push(`Players loaded on Big (${stakeBig}%) but Small has higher chance (${bsProb.small}%). Consider Small.`);
-    else advice.push(`Players loaded on Big (${stakeBig}%). Market shows Big ${bsProb.big}% vs Small ${bsProb.small}%.`);
-  } else if(stakeSmall > stakeBig){
-    if(bsProb.big > bsProb.small + 5) advice.push(`Players loaded on Small (${stakeSmall}%) but Big has higher chance (${bsProb.big}%). Consider Big.`);
-    else advice.push(`Players loaded on Small (${stakeSmall}%). Market shows Big ${bsProb.big}% vs Small ${bsProb.small}%.`);
-  } else {
-    advice.push(`Stakes balanced. Big ${bsProb.big}%, Small ${bsProb.small}%.`);
-  }
-  // add general risk line
-  advice.push('Risk: predictions are probabilistic — manage stake size accordingly.');
-  return advice.join(' ');
-}
-
-// UI wiring
-document.getElementById('analyzeBtn').addEventListener('click', ()=>{
-  const histText = document.getElementById('history').value;
-  const period = document.getElementById('period').value || '(no period)';
-  const stakeBig = parseFloat(document.getElementById('stakeBig').value) || 0;
-  const stakeSmall = parseFloat(document.getElementById('stakeSmall').value) || 0;
-
-  const history = parseHistory(histText);
-  const {counts, probs, total} = analyze(history);
-  const top3 = topKFromProbs(probs,3);
-  const bs = bigSmallProb(probs);
-
-  // render
-  document.getElementById('outputCard').style.display = 'block';
-  document.getElementById('title').textContent = `Prediction for Period ${period}`;
-  document.getElementById('explain').textContent = `Using last ${total} rounds for frequency analysis.`;
-
-  // freq table
-  const tbody = document.querySelector('#freqTable tbody');
-  tbody.innerHTML = '';
-  for(let i=0;i<10;i++){
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i}</td><td>${counts[i]}</td><td>${probs[i]}%</td>`;
-    tbody.appendChild(tr);
-  }
-
-  // top3
-  const top3Box = document.getElementById('top3');
-  top3Box.innerHTML = '';
-  top3.forEach(item=>{
-    const el = document.createElement('div');
-    el.className = 'chip';
-    el.innerHTML = `<strong>${item.num}</strong> — ${item.prob}%`;
-    top3Box.appendChild(el);
-  });
-
-  // big/small chips
-  const bsBox = document.getElementById('bigSmallChips');
-  bsBox.innerHTML = '';
-  const elBig = document.createElement('div'); elBig.className='chip big'; elBig.innerHTML=`Big: ${bs.big}%`;
-  const elSmall = document.createElement('div'); elSmall.className='chip small'; elSmall.innerHTML=`Small: ${bs.small}%`;
-  bsBox.appendChild(elBig); bsBox.appendChild(elSmall);
-
-  // summary chips
-  const sum = document.getElementById('summaryChips');
-  sum.innerHTML = '';
-  sum.appendChild(Object.assign(document.createElement('div'),{className:'chip',innerText:`History length: ${history.length}`}));
-  sum.appendChild(Object.assign(document.createElement('div'),{className:'chip',innerText:`Most frequent: ${top3[0].num} (${top3[0].prob}%)`}));
-
-  // advice
-  const adviceText = makeAdvice(stakeBig, stakeSmall, bs);
-  document.getElementById('advice').textContent = adviceText;
-});
-</script>
+      document.getElementById("output").innerHTML =
+        `Predicted Number: <span style="color:yellow">${predictedNum}</span><br>
+         Big Chance: ${bigChance}% | Small Chance: ${smallChance}%`;
+    }
+  </script>
 </body>
-  </html>
+</html>
