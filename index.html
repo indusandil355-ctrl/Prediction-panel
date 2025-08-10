@@ -1,163 +1,199 @@
-// server-axios.js
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
-const app = express();
-app.use(cors());
-const PORT = process.env.PORT || 8080;
-
-/*
-  Replace API_URL with the real endpoint if you have it.
-  Example API might return JSON: { period: "...", result: 7 }
-*/
-const API_URL_1 = 'https://example.com/api/latest'; // <-- change
-const API_URL_2 = 'https://www.predictwingo.in/api/latest'; // <-- change
-
-async function fetchFromApi(url){
-  const res = await axios.get(url, { timeout: 8000 });
-  return res.data;
-}
-
-app.get('/api/combined', async (req, res) => {
-  try{
-    // parallel fetch
-    const [a,b] = await Promise.all([ fetchFromApi(API_URL_1), fetchFromApi(API_URL_2) ]);
-    // customize mapping according to actual response structure
-    const result = {
-      source1: a,
-      source2: b,
-      combinedAt: new Date().toISOString()
-    };
-    res.json(result);
-  }catch(err){
-    console.error(err.message);
-    res.status(500).json({ error: 'fetch failed', detail: err.message });
-  }
-});
-
-app.listen(PORT, ()=> console.log('Listening on',PORT));
-
-
-    // server-puppeteer.js
-const express = require('express');
-const cors = require('cors');
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-puppeteer.use(StealthPlugin());
-const app = express();
-app.use(cors());
-const PORT = process.env.PORT || 8080;
-
-/*
-  Example: we'll visit 91appe page and try to read a DOM selector that contains the latest result.
-  You MUST replace selectorString with the real DOM selector that shows the number.
-*/
-
-const GAME_PAGE = 'https://91appe.com/#/saasLottery/WinGo?gameCode=WinGo_30S&lottery=WinGo';
-const SELECTOR_FOR_RESULT = '.last-result-selector'; // <-- change to actual selector
-
-async function scrapeOne(url, selector){
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox','--disable-setuid-sandbox'],
-    headless: true
-  });
-  try{
-    const page = await browser.newPage();
-    await page.goto(url, {waitUntil:'networkidle2', timeout:20000});
-    // wait for selector (adjust timeout as needed)
-    await page.waitForSelector(selector, {timeout:7000});
-    const text = await page.$eval(selector, el => el.innerText.trim());
-    return text;
-  }catch(err){
-    throw err;
-  }finally{
-    await browser.close();
-  }
-}
-
-app.get('/api/scrape91', async (req,res)=>{
-  try{
-    const text = await scrapeOne(GAME_PAGE, SELECTOR_FOR_RESULT);
-    res.json({source:'91appe', value:text});
-  }catch(e){
-    console.error(e);
-    res.status(500).json({ error:'scrape failed', detail: e.message });
-  }
-});
-
-app.listen(PORT, ()=> console.log('Puppeteer server listening on', PORT));
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="hi">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Combined WinGo Panel</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Prediction Panel — heuristic</title>
 <style>
-  body{background:#111;color:#fff;font-family:Arial;text-align:center;padding:20px}
-  .box{background:#222;padding:16px;border-radius:8px;max-width:540px;margin:20px auto}
-  input,button{padding:10px;margin:6px;border-radius:6px}
-  .chip{display:inline-block;padding:6px 10px;background:#111;border:1px solid #333;border-radius:6px;margin:4px}
+  :root{--bg:#0f0f0f;--card:#171717;--accent:#ffcc00;--muted:#999}
+  body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:#fff}
+  .wrap{max-width:820px;margin:20px auto;padding:20px}
+  h1{color:var(--accent);margin:0 0 12px}
+  .card{background:var(--card);padding:16px;border-radius:10px;margin-bottom:14px}
+  label{display:block;margin:6px 0;color:var(--muted);font-size:14px}
+  textarea,input,select{width:100%;padding:10px;border-radius:6px;border:1px solid #333;background:#0f0f0f;color:#fff}
+  button{background:var(--accent);border:none;color:#000;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer}
+  .row{display:flex;gap:12px}
+  .col{flex:1}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .chip{background:#222;padding:8px 10px;border-radius:8px;border:1px solid #2a2a2a}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  td,th{padding:6px;border-bottom:1px dashed #222;text-align:left}
+  .big{color:#7efc6b}
+  .small{color:#7fd2ff}
+  .warn{color:#ff8a8a}
+  .muted{color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
-  <h2>Combined WinGo Panel</h2>
-  <div class="box">
-    <div>
-      <button id="refresh">🔁 Fetch live from backend</button>
-      <button id="predictBtn">Predict (use fetched)</button>
+  <div class="wrap">
+    <h1>🔮 Prediction Panel (Heuristic)</h1>
+
+    <div class="card">
+      <label>1) Past results (comma separated) — example: <span class="muted">4,2,3,9,0,1,4,3</span></label>
+      <textarea id="history" rows="3" placeholder="Enter recent numbers separated by comma (most recent last)"></textarea>
+
+      <label>2) (Optional) Current period number (auto-fill if you want)</label>
+      <input id="period" placeholder="Period id (optional)">
+
+      <label>3) (Optional) Stake distribution — percent of money on Big and Small (sum should be 100)</label>
+      <div class="row">
+        <div class="col">
+          <label class="muted">% on Big</label>
+          <input id="stakeBig" placeholder="ex: 30" />
+        </div>
+        <div class="col">
+          <label class="muted">% on Small</label>
+          <input id="stakeSmall" placeholder="ex: 70" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="row">
+        <div style="flex:0 0 auto"><button id="analyzeBtn">Analyze & Predict</button></div>
+        <div style="flex:1"></div>
+      </div>
+
+      <div class="chips" id="summaryChips"></div>
     </div>
-    <div id="live" style="margin-top:12px">No data yet</div>
-    <div id="pred" style="margin-top:12px"></div>
+
+    <div class="card" id="outputCard" style="display:none">
+      <div id="title" style="font-size:18px;font-weight:700;margin-bottom:8px"></div>
+      <div id="explain" class="muted"></div>
+
+      <table id="freqTable">
+        <thead><tr><th>Number</th><th>Count</th><th>Probability</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div style="margin-top:12px">
+        <strong>Top 3 predicted numbers:</strong>
+        <div class="chips" id="top3"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <strong>Big vs Small probability:</strong>
+        <div id="bigSmallChips" class="chips"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <strong>Suggested action (based on stake distribution):</strong>
+        <div id="advice" class="chip"></div>
+      </div>
+    </div>
+
+    <div class="muted" style="margin-top:8px">
+      नोट: यह एक heuristic/statistical tool है — यह गारंटी नहीं देता। कोई भी betting decision अपनी responsibility पर लें।
+    </div>
   </div>
 
 <script>
-const API_BASE = 'https://your-backend.example.com'; // <-- change to your deployed backend
+// Helper functions
+function parseHistory(text){
+  if(!text) return [];
+  const arr = text.split(',').map(s=>s.trim()).filter(Boolean).map(s=>{
+    // keep only last digit if multi-digit
+    const m = s.match(/\d+/);
+    return m ? parseInt(m[0].slice(-1)) : NaN;
+  }).filter(n=>!isNaN(n) && n>=0 && n<=9);
+  return arr;
+}
 
-document.getElementById('refresh').addEventListener('click', async ()=>{
-  document.getElementById('live').textContent = 'Fetching...';
-  try{
-    const r = await fetch(API_BASE + '/api/combined'); // or '/api/scrape91'
-    const j = await r.json();
-    document.getElementById('live').textContent = JSON.stringify(j, null, 2);
-    window._lastFetched = j;
-  }catch(e){
-    document.getElementById('live').textContent = 'Fetch failed: ' + e.message;
-  }
-});
+function analyze(history){
+  const counts = Array(10).fill(0);
+  history.forEach(d=>counts[d]++);
+  const total = history.length || 1;
+  const probs = counts.map(c => +(c/total*100).toFixed(2)); // percent
+  return {counts, probs, total};
+}
 
-document.getElementById('predictBtn').addEventListener('click', ()=>{
-  const data = window._lastFetched;
-  if(!data){
-    alert('Pehle Fetch karo (Refresh)');
-    return;
+function topKFromProbs(probs, k=3){
+  const items = probs.map((p,i)=>({num:i,prob:p}));
+  items.sort((a,b)=>b.prob - a.prob);
+  return items.slice(0,k);
+}
+
+function bigSmallProb(probs){
+  // small = 0-4, big = 5-9
+  const small = probs.slice(0,5).reduce((s,x)=>s+x,0);
+  const big = probs.slice(5,10).reduce((s,x)=>s+x,0);
+  return {small: +small.toFixed(2), big: +big.toFixed(2)};
+}
+
+function makeAdvice(stakeBig, stakeSmall, bsProb){
+  // If stake heavily on one side, suggest opposite if bsProb shows advantage
+  const advice = [];
+  if(stakeBig+stakeSmall === 0) {
+    advice.push('No stake distribution provided — no stake-based advice.');
+    return advice.join(' ');
   }
-  // example: find last digit(s) from source1 or source2
-  // This depends on how backend shapes the response.
-  // We'll try to find a numeric digit in returned JSON (adjust as needed).
-  let last = null;
-  if(data.source1 && typeof data.source1.result !== 'undefined') last = data.source1.result;
-  else if(data.source2 && typeof data.source2.result !== 'undefined') last = data.source2.result;
-  else {
-    // fallback: find any number inside JSON string
-    const s = JSON.stringify(data);
-    const m = s.match(/(\d)(?!.*\d)/); // last single digit match (very rough)
-    if(m) last = parseInt(m[1]);
+  if(stakeBig > stakeSmall){
+    // players put more on Big
+    if(bsProb.small > bsProb.big + 5) advice.push(`Players loaded on Big (${stakeBig}%) but Small has higher chance (${bsProb.small}%). Consider Small.`);
+    else advice.push(`Players loaded on Big (${stakeBig}%). Market shows Big ${bsProb.big}% vs Small ${bsProb.small}%.`);
+  } else if(stakeSmall > stakeBig){
+    if(bsProb.big > bsProb.small + 5) advice.push(`Players loaded on Small (${stakeSmall}%) but Big has higher chance (${bsProb.big}%). Consider Big.`);
+    else advice.push(`Players loaded on Small (${stakeSmall}%). Market shows Big ${bsProb.big}% vs Small ${bsProb.small}%.`);
+  } else {
+    advice.push(`Stakes balanced. Big ${bsProb.big}%, Small ${bsProb.small}%.`);
   }
-  if(last === null || isNaN(last)){
-    alert('Unable to parse last result from data. Backend format mismatch.');
-    return;
+  // add general risk line
+  advice.push('Risk: predictions are probabilistic — manage stake size accordingly.');
+  return advice.join(' ');
+}
+
+// UI wiring
+document.getElementById('analyzeBtn').addEventListener('click', ()=>{
+  const histText = document.getElementById('history').value;
+  const period = document.getElementById('period').value || '(no period)';
+  const stakeBig = parseFloat(document.getElementById('stakeBig').value) || 0;
+  const stakeSmall = parseFloat(document.getElementById('stakeSmall').value) || 0;
+
+  const history = parseHistory(histText);
+  const {counts, probs, total} = analyze(history);
+  const top3 = topKFromProbs(probs,3);
+  const bs = bigSmallProb(probs);
+
+  // render
+  document.getElementById('outputCard').style.display = 'block';
+  document.getElementById('title').textContent = `Prediction for Period ${period}`;
+  document.getElementById('explain').textContent = `Using last ${total} rounds for frequency analysis.`;
+
+  // freq table
+  const tbody = document.querySelector('#freqTable tbody');
+  tbody.innerHTML = '';
+  for(let i=0;i<10;i++){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i}</td><td>${counts[i]}</td><td>${probs[i]}%</td>`;
+    tbody.appendChild(tr);
   }
 
-  // simple prediction: opposite side heuristic
-  const side = (last >=0 && last <=4) ? 'Small' : 'Big';
-  const predictedSide = side === 'Small' ? 'Big' : 'Small';
-  const predictedNumber = predictedSide === 'Small' ? 2 : 7; // placeholder
-  document.getElementById('pred').innerHTML = `
-    <div class="chip">Last: ${last}</div>
-    <div class="chip">Predicted side: ${predictedSide}</div>
-    <div class="chip">Predicted number: ${predictedNumber}</div>
-  `;
+  // top3
+  const top3Box = document.getElementById('top3');
+  top3Box.innerHTML = '';
+  top3.forEach(item=>{
+    const el = document.createElement('div');
+    el.className = 'chip';
+    el.innerHTML = `<strong>${item.num}</strong> — ${item.prob}%`;
+    top3Box.appendChild(el);
+  });
+
+  // big/small chips
+  const bsBox = document.getElementById('bigSmallChips');
+  bsBox.innerHTML = '';
+  const elBig = document.createElement('div'); elBig.className='chip big'; elBig.innerHTML=`Big: ${bs.big}%`;
+  const elSmall = document.createElement('div'); elSmall.className='chip small'; elSmall.innerHTML=`Small: ${bs.small}%`;
+  bsBox.appendChild(elBig); bsBox.appendChild(elSmall);
+
+  // summary chips
+  const sum = document.getElementById('summaryChips');
+  sum.innerHTML = '';
+  sum.appendChild(Object.assign(document.createElement('div'),{className:'chip',innerText:`History length: ${history.length}`}));
+  sum.appendChild(Object.assign(document.createElement('div'),{className:'chip',innerText:`Most frequent: ${top3[0].num} (${top3[0].prob}%)`}));
+
+  // advice
+  const adviceText = makeAdvice(stakeBig, stakeSmall, bs);
+  document.getElementById('advice').textContent = adviceText;
 });
 </script>
 </body>
-          </html>
+  </html>
